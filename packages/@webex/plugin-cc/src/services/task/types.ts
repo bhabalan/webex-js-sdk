@@ -14,6 +14,14 @@ export const DESTINATION_TYPE = {
 
 export type DestinationType = Enum<typeof DESTINATION_TYPE>;
 
+export const CONSULT_TRANSFER_DESTINATION_TYPE = {
+  AGENT: 'agent',
+  ENTRYPOINT: 'entryPoint',
+  DIALNUMBER: 'dialNumber',
+};
+
+export type ConsultTransferDestinationType = Enum<typeof CONSULT_TRANSFER_DESTINATION_TYPE>;
+
 export const CONSULT_DESTINATION_TYPE = {
   // Reference: https://developer.webex-cx.com/documentation/tasks/v1/consult-task
   AGENT: 'agent',
@@ -283,6 +291,14 @@ export type TransferPayLoad = {
 };
 
 /**
+ * Parameters to be passed for transfer task
+ */
+export type ConsultTransferPayLoad = {
+  to: string;
+  destinationType: ConsultTransferDestinationType;
+};
+
+/**
  * Parameters to be passed for consult task
  */
 export type ConsultPayload = {
@@ -299,6 +315,14 @@ export type ConsultEndPayload = {
   isSecondaryEpDnAgent?: boolean;
   queueId?: string; // Dev portal API docs state that it requires queueId, but it's optional in Desktop usage
   taskId: string;
+};
+
+/**
+ * Parameters to be passed for transfer task
+ */
+export type TransferPayload = {
+  to: string | undefined;
+  destinationType: DestinationType;
 };
 
 /**
