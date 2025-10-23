@@ -72,7 +72,6 @@ module.exports = {browser: true};
 
 This sets up the appropriate configurations for each of the tools needed by various portions of this package. Once these configurations are present, the CLI and Module workflows for this package should become executable.
 
-
 ### CLI Consumption
 
 ```json
@@ -123,4 +122,4 @@ Pull requests welcome. Please see [CONTRIBUTING.md](https://github.com/webex/web
 
 ## Maintainers
 
-This package is maintained by [Cisco Webex for Developers](https://developer.webex.com/).
+This package is maintained by [Cisco Webex for Developers](https://developer.webex.com/)..
