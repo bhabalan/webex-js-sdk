@@ -153,4 +153,4 @@ This project is maintained by [Cisco Webex for Developers](https://developer.web
 
 ## License
 
-See our [license](./LICENSE) for more information.
+See our [license](./LICENSE) for more information..
