@@ -365,3 +365,87 @@ jobs:
           else
             git push origin ${{ steps.versionextractor.outputs.version }}
           fi
+
+      - name: Notify Webex Space
+        if: ${{ steps.skipcondition.outputs.proceed == 'true' }}
+        env:
+          WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
+          WEBEX_SPACE_ID: ${{ secrets.WEBEX_SPACE_ID }}
+          RELEASE_VERSION: ${{ steps.versionextractor.outputs.version }}
+          RELEASE_MESSAGE: ${{ steps.versionextractor.outputs.message }}
+          RELEASE_COMMIT: ${{ steps.lastcommit.outputs.commit }}
+        run: |
+          set -euo pipefail
+
+          card=$(jq -n \
+            --arg version "$RELEASE_VERSION" \
+            --arg repo "${GITHUB_REPOSITORY}" \
+            --arg actor "${GITHUB_ACTOR}" \
+            --arg message "$RELEASE_MESSAGE" \
+            --arg commit "$RELEASE_COMMIT" \
+            --arg run_url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg commit_url "https://github.com/${GITHUB_REPOSITORY}/commit/${RELEASE_COMMIT}" \
+            '{
+              "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+              "type": "AdaptiveCard",
+              "version": "1.3",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "Release " + $version + " published",
+                  "wrap": true,
+                  "weight": "Bolder",
+                  "size": "Large"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": $message,
+                  "wrap": true,
+                  "spacing": "Small"
+                },
+                {
+                  "type": "FactSet",
+                  "facts": [
+                    {"title": "Repository", "value": $repo},
+                    {"title": "Tag", "value": $version},
+                    {"title": "Commit", "value": $commit},
+                    {"title": "Triggered By", "value": $actor}
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "type": "Action.OpenUrl",
+                  "title": "View Workflow Run",
+                  "url": $run_url
+                },
+                {
+                  "type": "Action.OpenUrl",
+                  "title": "View Commit",
+                  "url": $commit_url
+                }
+              ]
+            }'
+          )
+
+          payload=$(jq -n \
+            --arg roomId "$WEBEX_SPACE_ID" \
+            --arg markdown "Release $RELEASE_VERSION published for ${GITHUB_REPOSITORY}" \
+            --argjson card "$card" \
+            '{
+              roomId: $roomId,
+              markdown: $markdown,
+              attachments: [
+                {
+                  contentType: "application/vnd.microsoft.card.adaptive",
+                  content: $card
+                }
+              ]
+            }'
+          )
+
+          curl -sSf -X POST \
+            -H "Authorization: Bearer $WEBEX_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            https://webexapis.com/v1/messages
