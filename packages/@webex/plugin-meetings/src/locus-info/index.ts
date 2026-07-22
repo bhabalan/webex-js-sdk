@@ -286,6 +286,7 @@ export default class LocusInfo extends EventsScope {
   hashTreeParsers: Map<string, HashTreeParserEntry>;
   hashTreeObjectId2ParticipantId: Map<number, string>; // mapping of hash tree object ids to participant ids
   classicVsHashTreeMismatchMetricCounter = 0;
+  private destroyMeetingSuspended = false;
 
   /**
    * Constructor
@@ -518,7 +519,7 @@ export default class LocusInfo extends EventsScope {
     this.updateControls(locus.controls, locus.self);
     this.updateLocusUrl(locus.url, ControlsUtils.isMainSessionDTO(locus));
     this.updateFullState(locus.fullState);
-    this.updateMeetingInfo(locus.info);
+    this.updateMeetingInfo(locus.info, locus.self);
     this.updateEmbeddedApps(locus.embeddedApps);
     // self and participants generate sipUrl for 1:1 meeting
     this.updateSelf(locus.self);
@@ -1773,8 +1774,19 @@ export default class LocusInfo extends EventsScope {
           options: {
             meetingId: this.meetingId,
           },
+          payload: {
+            eventData: {
+              joinInProgress: this.destroyMeetingSuspended,
+            },
+          },
         });
 
+        if (this.destroyMeetingSuspended) {
+          Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.DESTROY_MEETING_WHILE_SUSPENDED, {
+            meetingId: this.meetingId,
+            reason: 'CALL_INACTIVE',
+          });
+        }
         this.emitScoped(
           {
             file: 'locus-info',
@@ -1799,7 +1811,18 @@ export default class LocusInfo extends EventsScope {
           options: {
             meetingId: this.meetingId,
           },
+          payload: {
+            eventData: {
+              joinInProgress: this.destroyMeetingSuspended,
+            },
+          },
         });
+        if (this.destroyMeetingSuspended) {
+          Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.DESTROY_MEETING_WHILE_SUSPENDED, {
+            meetingId: this.meetingId,
+            reason: 'PARTNER_LEFT',
+          });
+        }
         this.emitScoped(
           {
             file: 'locus-info',
@@ -1826,8 +1849,19 @@ export default class LocusInfo extends EventsScope {
           options: {
             meetingId: this.meetingId,
           },
+          payload: {
+            eventData: {
+              joinInProgress: this.destroyMeetingSuspended,
+            },
+          },
         });
 
+        if (this.destroyMeetingSuspended) {
+          Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.DESTROY_MEETING_WHILE_SUSPENDED, {
+            meetingId: this.meetingId,
+            reason: 'SELF_LEFT',
+          });
+        }
         this.emitScoped(
           {
             file: 'locus-info',
@@ -1842,48 +1876,79 @@ export default class LocusInfo extends EventsScope {
       }
     } else if (this.parsedLocus.fullState?.type === _MEETING_) {
       if (this.fullState && MeetingsUtil.isWholeMeetingEnded(this.fullState)) {
-        LoggerProxy.logger.warn(
-          'Locus-info:index#isMeetingActive --> Meeting is ending due to inactive'
-        );
-
-        // @ts-ignore
-        this.webex.internal.newMetrics.submitClientEvent({
-          name: 'client.call.remote-ended',
-          options: {
+        if (this.destroyMeetingSuspended) {
+          LoggerProxy.logger.info(
+            'Locus-info:index#isMeetingActive --> suppressing DESTROY_MEETING (MEETING_INACTIVE_TERMINATING) because destroyMeeting is suspended'
+          );
+          Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.DESTROY_MEETING_WHILE_SUSPENDED, {
             meetingId: this.meetingId,
-          },
-        });
-        this.emitScoped(
-          {
-            file: 'locus-info',
-            function: 'isMeetingActive',
-          },
-          EVENTS.DESTROY_MEETING,
-          {
-            reason: MEETING_REMOVED_REASON.MEETING_INACTIVE_TERMINATING,
-            shouldLeave: false,
-          }
-        );
+            reason: 'MEETING_INACTIVE_TERMINATING',
+          });
+        } else {
+          LoggerProxy.logger.warn(
+            'Locus-info:index#isMeetingActive --> Meeting is ending due to inactive'
+          );
+
+          // @ts-ignore
+          this.webex.internal.newMetrics.submitClientEvent({
+            name: 'client.call.remote-ended',
+            options: {
+              meetingId: this.meetingId,
+            },
+          });
+
+          this.emitScoped(
+            {
+              file: 'locus-info',
+              function: 'isMeetingActive',
+            },
+            EVENTS.DESTROY_MEETING,
+            {
+              reason: MEETING_REMOVED_REASON.MEETING_INACTIVE_TERMINATING,
+              shouldLeave: false,
+            }
+          );
+        }
       }
       // If you are  guest and you are removed from the meeting
       // You wont get any further events
       else if (this.parsedLocus.self && this.parsedLocus.self.removed) {
-        // Check if we need to send an event
-        this.emitScoped(
-          {
-            file: 'locus-info',
-            function: 'isMeetingActive',
-          },
-          EVENTS.DESTROY_MEETING,
-          {
-            reason: MEETING_REMOVED_REASON.SELF_REMOVED,
-            shouldLeave: false,
-          }
-        );
+        if (this.destroyMeetingSuspended) {
+          LoggerProxy.logger.info(
+            'Locus-info:index#isMeetingActive --> suppressing DESTROY_MEETING (SELF_REMOVED) because destroyMeeting is suspended'
+          );
+          Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.DESTROY_MEETING_WHILE_SUSPENDED, {
+            meetingId: this.meetingId,
+            reason: 'SELF_REMOVED',
+          });
+        } else {
+          this.emitScoped(
+            {
+              file: 'locus-info',
+              function: 'isMeetingActive',
+            },
+            EVENTS.DESTROY_MEETING,
+            {
+              reason: MEETING_REMOVED_REASON.SELF_REMOVED,
+              shouldLeave: false,
+            }
+          );
+        }
       }
     } else {
       LoggerProxy.logger.warn('Locus-info:index#isMeetingActive --> Meeting Type is unknown.');
     }
+  }
+
+  /**
+   * Suspends or resumes the emission of DESTROY_MEETING events in certain situations.
+   * Used by joinWithMedia to prevent meeting destruction during retry flows.
+   * @param {boolean} suspend - true to suppress, false to resume
+   * @returns {undefined}
+   * @memberof LocusInfo
+   */
+  suspendDestroyMeeting(suspend: boolean) {
+    this.destroyMeetingSuspended = suspend;
   }
 
   /**
@@ -2491,9 +2556,19 @@ export default class LocusInfo extends EventsScope {
    */
   updateMeetingInfo(info: object, self?: object) {
     const roles = self ? SelfUtils.getRoles(self) : this.parsedLocus.self?.roles || [];
-    if ((info && !isEqual(this.info, info)) || (!isEqual(this.roles, roles) && info)) {
-      const isJoined = SelfUtils.isJoined(self || this.parsedLocus.self);
-      const parsedInfo = InfoUtils.getInfos(this.parsedLocus.info, info, roles, isJoined);
+    const isJoined = SelfUtils.isJoined(self || this.parsedLocus.self);
+
+    // The parsed userDisplayHints depend on info, roles and isJoined, so we must recompute
+    // whenever any of them changes. A common case is self transitioning to JOINED via a delta
+    // that doesn't carry an info section - in that case we fall back to the previously stored
+    // info so the hints get reparsed with the new joined state (e.g. VIEW_THE_PARTICIPANT_LIST).
+    const infoToParse = info || this.info;
+    const infoChanged = info && !isEqual(this.info, info);
+    const rolesChanged = !isEqual(this.roles, roles);
+    const isJoinedChanged = SelfUtils.isJoined(this.parsedLocus.self) !== isJoined;
+
+    if (infoToParse && (infoChanged || rolesChanged || isJoinedChanged)) {
+      const parsedInfo = InfoUtils.getInfos(this.parsedLocus.info, infoToParse, roles, isJoined);
 
       if (parsedInfo.updates.isLocked) {
         this.emitScoped(
@@ -2516,7 +2591,7 @@ export default class LocusInfo extends EventsScope {
         );
       }
 
-      this.info = info;
+      this.info = infoToParse;
       this.parsedLocus.info = parsedInfo.current;
       // Parses the info and adds necessary values
       this.updateMeeting(parsedInfo.current);
