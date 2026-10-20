@@ -11,7 +11,11 @@ permissions:
 jobs:
   release-proof:
     name: Verify release selection after merge
-    if: github.event.before != '0000000000000000000000000000000000000000'
+    if: >-
+      github.event.before != '0000000000000000000000000000000000000000' &&
+      (startsWith(github.event.head_commit.message, 'test: markdown proof') ||
+       startsWith(github.event.head_commit.message, 'test: sdd proof') ||
+       startsWith(github.event.head_commit.message, 'test: source proof'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -58,10 +62,10 @@ jobs:
           printf '%s\n' "$OUTPUT" | tee "$PROOF_DIRECTORY/increment.log"
       - name: Run the existing deploy command against the local registry
         env:
-          YARN_RECURSIVE: ${{ steps.lists.outputs.yarn-recursive }}
+          PROOF_YARN_SELECTION: ${{ steps.lists.outputs.yarn-recursive }}
         run: |
           set -euo pipefail
-          yarn workspaces foreach --from "$YARN_RECURSIVE" --verbose run deploy:npm --access public --tag next | tee "$PROOF_DIRECTORY/deploy.log"
+          yarn workspaces foreach --from "$PROOF_YARN_SELECTION" --verbose run deploy:npm --access public --tag next | tee "$PROOF_DIRECTORY/deploy.log"
       - name: Verify manifest versions and actual registry contents
         run: node scripts/spark-866626-proof/check.cjs verify
       - name: Upload proof records

@@ -64,7 +64,7 @@ function collect() {
     node: process.version, yarn: execute('yarn', ['--version']),
     versionsBefore: versions(), registry,
     increment: 'yarn package-tools increment --packages $NODE_RECURSIVE --tag next',
-    deploy: 'yarn workspaces foreach --from "$YARN_RECURSIVE" --verbose run deploy:npm --access public --tag next',
+    deploy: 'yarn workspaces foreach --from "$PROOF_YARN_SELECTION" --verbose run deploy:npm --access public --tag next',
   };
   fs.writeFileSync(stateFile, JSON.stringify(state, null, 2) + '\n');
   console.log('Package selection assertions passed for ' + kind);
