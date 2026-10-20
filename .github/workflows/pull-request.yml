@@ -4,6 +4,7 @@ run-name: ${{ github.actor }} is running Pull Request CI
 on:
   pull_request_target:
     types: [opened, labeled, reopened]
+    branches-ignore: [codex/spark-866626-fork-proof]
   workflow_dispatch:
 
 concurrency:

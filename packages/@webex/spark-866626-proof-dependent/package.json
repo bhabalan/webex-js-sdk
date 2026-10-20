@@ -1,0 +1,17 @@
+{
+  "name": "@spark-866626-proof/dependent",
+  "version": "0.0.0",
+  "main": "./src/index.js",
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@spark-866626-proof/runtime": "workspace:*"
+  },
+  "scripts": {
+    "deploy:npm": "yarn npm publish"
+  },
+  "publishConfig": {
+    "registry": "http://127.0.0.1:4873"
+  }
+}

@@ -4702,6 +4702,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@spark-866626-proof/dependent@workspace:packages/@webex/spark-866626-proof-dependent":
+  version: 0.0.0-use.local
+  resolution: "@spark-866626-proof/dependent@workspace:packages/@webex/spark-866626-proof-dependent"
+  dependencies:
+    "@spark-866626-proof/runtime": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@spark-866626-proof/runtime@workspace:*, @spark-866626-proof/runtime@workspace:packages/@webex/spark-866626-proof-runtime":
+  version: 0.0.0-use.local
+  resolution: "@spark-866626-proof/runtime@workspace:packages/@webex/spark-866626-proof-runtime"
+  languageName: unknown
+  linkType: soft
+
 "@stylistic/eslint-plugin-ts@npm:^2.9.0":
   version: 2.13.0
   resolution: "@stylistic/eslint-plugin-ts@npm:2.13.0"

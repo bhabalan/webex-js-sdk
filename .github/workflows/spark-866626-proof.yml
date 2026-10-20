@@ -1,0 +1,78 @@
+name: SPARK-866626 Fork Proof
+run-name: ${{ github.event.head_commit.message }}
+
+on:
+  push:
+    branches: [codex/spark-866626-fork-proof]
+
+permissions:
+  contents: read
+
+jobs:
+  release-proof:
+    name: Verify release selection after merge
+    if: github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout merged fork branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.14.0'
+      - name: Set proof directory
+        run: echo "PROOF_DIRECTORY=$RUNNER_TEMP/spark-866626-evidence" >> "$GITHUB_ENV"
+      - name: Install SDK dependencies without install scripts
+        env:
+          YARN_ENABLE_SCRIPTS: 'false'
+        run: |
+          corepack enable
+          yarn --version
+          yarn install --immutable
+      - name: Build the reviewed CLI and package tooling
+        run: |
+          yarn workspace @webex/cli-tools build:src
+          yarn workspace @webex/package-tools build:src
+      - name: Start a temporary local npm registry
+        run: |
+          npm install --prefix "$RUNNER_TEMP/proof-registry" --ignore-scripts --no-audit --no-fund verdaccio@6.2.0
+          node scripts/spark-866626-proof/start-registry.cjs "$RUNNER_TEMP/proof-registry/node_modules/verdaccio/bin/verdaccio"
+      - name: Generate and verify the four package lists
+        id: lists
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          MERGE_MESSAGE: ${{ github.event.head_commit.message }}
+        run: node scripts/spark-866626-proof/check.cjs collect
+      - name: Increment package versions with the existing argument pattern
+        env:
+          NODE_RECURSIVE: ${{ steps.lists.outputs.node-recursive }}
+        run: |
+          set -euo pipefail
+          # Keep the production command's word splitting, including the empty-list case.
+          # shellcheck disable=SC2086
+          OUTPUT=$(yarn package-tools increment --packages $NODE_RECURSIVE --tag next)
+          printf '%s\n' "$OUTPUT" | tee "$PROOF_DIRECTORY/increment.log"
+      - name: Run the existing deploy command against the local registry
+        env:
+          YARN_RECURSIVE: ${{ steps.lists.outputs.yarn-recursive }}
+        run: |
+          set -euo pipefail
+          yarn workspaces foreach --from "$YARN_RECURSIVE" --verbose run deploy:npm --access public --tag next | tee "$PROOF_DIRECTORY/deploy.log"
+      - name: Verify manifest versions and actual registry contents
+        run: node scripts/spark-866626-proof/check.cjs verify
+      - name: Upload proof records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: spark-866626-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/spark-866626-evidence/evidence.json
+            ${{ runner.temp }}/spark-866626-evidence/increment.log
+            ${{ runner.temp }}/spark-866626-evidence/deploy.log
+            ${{ runner.temp }}/spark-866626-evidence/registry.log
+            ${{ runner.temp }}/spark-866626-evidence/*.tgz
+          retention-days: 30
